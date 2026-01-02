@@ -4,6 +4,7 @@ import { CoinComponent } from './CoinComponent';
 import { PocketComponent } from './PocketComponent';
 import { AimLine } from './AimLine';
 import { GameModeSelect } from './GameModeSelect';
+import { SoundToggle } from './SoundToggle';
 import { BOARD_SIZE, BORDER_WIDTH } from '@/utils/gameSetup';
 import { Loader2 } from 'lucide-react';
 
@@ -108,8 +109,11 @@ export const CarromBoard: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center gap-4 p-4 animate-fade-in">
-      {/* Game mode selector */}
-      <GameModeSelect currentMode={gameState.gameMode} onModeChange={setGameMode} />
+      {/* Game mode selector and sound toggle */}
+      <div className="flex items-center gap-3">
+        <GameModeSelect currentMode={gameState.gameMode} onModeChange={setGameMode} />
+        <SoundToggle />
+      </div>
 
       {/* Score display */}
       <div className="flex justify-between w-full max-w-[400px] px-2">
