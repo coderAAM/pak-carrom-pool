@@ -20,6 +20,8 @@ export interface Pocket {
   radius: number;
 }
 
+export type GameMode = 'vs-ai' | 'two-player';
+
 export interface GameState {
   coins: Coin[];
   striker: Coin;
@@ -30,9 +32,10 @@ export interface GameState {
   player2Color: 'white' | 'black' | null;
   isStrikerPlaced: boolean;
   isAiming: boolean;
-  gamePhase: 'placing' | 'aiming' | 'shooting' | 'moving' | 'ended';
+  gamePhase: 'placing' | 'aiming' | 'shooting' | 'moving' | 'ai-thinking' | 'ended';
   winner: 1 | 2 | null;
   message: string;
+  gameMode: GameMode;
 }
 
 export interface AimState {
