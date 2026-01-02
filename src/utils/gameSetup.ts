@@ -94,6 +94,7 @@ export const createInitialGameState = (): GameState => ({
   gamePhase: 'placing',
   winner: null,
   message: 'Player 1: Position striker and shoot!',
+  gameMode: 'vs-ai',
 });
 
 export const getStrikerBounds = (currentPlayer: 1 | 2): { minX: number; maxX: number; y: number } => {
