@@ -19,6 +19,7 @@ import {
   createStriker,
 } from '@/utils/gameSetup';
 import { calculateAIShot } from '@/utils/aiPlayer';
+import { gameAudio } from '@/utils/gameAudio';
 
 export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
   const [gameState, setGameState] = useState<GameState>(() => ({
@@ -29,7 +30,19 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
   const [aimState, setAimState] = useState<AimState | null>(null);
   const animationRef = useRef<number>();
   const aiTimeoutRef = useRef<NodeJS.Timeout>();
+  const lastCollisionsRef = useRef<Set<string>>(new Set());
   const pockets = createPockets();
+
+  // Initialize audio on first interaction
+  useEffect(() => {
+    const initAudio = () => {
+      gameAudio.init();
+      document.removeEventListener('touchstart', initAudio);
+      document.removeEventListener('mousedown', initAudio);
+    };
+    document.addEventListener('touchstart', initAudio, { once: true });
+    document.addEventListener('mousedown', initAudio, { once: true });
+  }, []);
 
   // AI turn handler
   useEffect(() => {
@@ -38,7 +51,6 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
       gameState.currentPlayer === 2 &&
       gameState.gamePhase === 'placing'
     ) {
-      // Start AI thinking
       setGameState(prev => ({ ...prev, gamePhase: 'ai-thinking', message: 'AI is thinking...' }));
 
       aiTimeoutRef.current = setTimeout(() => {
@@ -50,13 +62,11 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           2
         );
 
-        // Position striker
         setGameState(prev => ({
           ...prev,
           striker: { ...prev.striker, x: aiShot.strikerX },
         }));
 
-        // Simulate aiming animation
         setTimeout(() => {
           const { vx, vy } = calculateShot(
             aiShot.strikerX,
@@ -65,6 +75,8 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
             aiShot.aimY,
             aiShot.power
           );
+
+          gameAudio.playStrike(aiShot.power);
 
           setGameState(prev => ({
             ...prev,
@@ -87,6 +99,7 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
 
       const allCoins = [...prev.coins, prev.striker];
       const activeCoins = allCoins.filter((c) => !c.isPocketed);
+      const currentCollisions = new Set<string>();
 
       // Update physics
       activeCoins.forEach((coin) => {
@@ -99,10 +112,26 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
       for (let i = 0; i < activeCoins.length; i++) {
         for (let j = i + 1; j < activeCoins.length; j++) {
           if (checkCoinCollision(activeCoins[i], activeCoins[j])) {
+            const collisionKey = [activeCoins[i].id, activeCoins[j].id].sort().join('-');
+            currentCollisions.add(collisionKey);
+            
+            // Play collision sound only for new collisions
+            if (!lastCollisionsRef.current.has(collisionKey)) {
+              const relativeVelocity = Math.sqrt(
+                Math.pow(activeCoins[i].vx - activeCoins[j].vx, 2) +
+                Math.pow(activeCoins[i].vy - activeCoins[j].vy, 2)
+              );
+              if (relativeVelocity > 1) {
+                gameAudio.playCollision(Math.min(relativeVelocity / 15, 1));
+              }
+            }
+            
             resolveCoinCollision(activeCoins[i], activeCoins[j]);
           }
         }
       }
+      
+      lastCollisionsRef.current = currentCollisions;
 
       // Check pocket collisions
       let pocketedThisTurn: Coin[] = [];
@@ -117,8 +146,11 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
 
             if (coin.type === 'striker') {
               strikerPocketed = true;
+              gameAudio.playFoul();
+            } else if (coin.type === 'queen') {
+              gameAudio.playQueenPocket();
             } else {
-              pocketedThisTurn.push(coin);
+              gameAudio.playPocket();
             }
           }
         });
@@ -131,7 +163,6 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
 
       // Check if still moving
       if (!isMoving(allCoins)) {
-        // Process turn end
         let newScore1 = prev.player1Score;
         let newScore2 = prev.player2Score;
         let nextPlayer = prev.currentPlayer;
@@ -139,7 +170,6 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
         let color1 = prev.player1Color;
         let color2 = prev.player2Color;
 
-        // Assign colors on first pocket
         if (!color1 && pocketedThisTurn.length > 0) {
           const firstPocketed = pocketedThisTurn.find(c => c.type !== 'queen');
           if (firstPocketed) {
@@ -148,7 +178,6 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           }
         }
 
-        // Calculate score
         pocketedThisTurn.forEach((coin) => {
           if (coin.type === 'queen') {
             if (prev.currentPlayer === 1) newScore1 += 3;
@@ -160,7 +189,6 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           }
         });
 
-        // Foul: striker pocketed
         if (strikerPocketed) {
           if (prev.currentPlayer === 1) newScore1 = Math.max(0, newScore1 - 1);
           else newScore2 = Math.max(0, newScore2 - 1);
@@ -178,6 +206,7 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           } else {
             message = `Player ${nextPlayer}'s turn`;
           }
+          gameAudio.playTurnChange();
         } else {
           if (prev.gameMode === 'vs-ai') {
             message = prev.currentPlayer === 1 ? 'Great shot! Your turn again!' : 'AI pocketed a coin!';
@@ -186,7 +215,6 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           }
         }
 
-        // Check win condition
         const whiteCoins = updatedCoins.filter(c => c.type === 'white' && !c.isPocketed);
         const blackCoins = updatedCoins.filter(c => c.type === 'black' && !c.isPocketed);
         let winner: 1 | 2 | null = null;
@@ -196,8 +224,17 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
         else if (blackCoins.length === 0 && color1 === 'black') winner = 1;
         else if (blackCoins.length === 0 && color2 === 'black') winner = 2;
 
-        // Reset striker
+        if (winner) {
+          const playerWon = prev.gameMode === 'vs-ai' ? winner === 1 : true;
+          if (playerWon) {
+            gameAudio.playWin();
+          } else {
+            gameAudio.playLose();
+          }
+        }
+
         const newStriker = createStriker(nextPlayer === 1 ? 'bottom' : 'top');
+        lastCollisionsRef.current.clear();
 
         return {
           ...prev,
@@ -298,6 +335,8 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
       return;
     }
 
+    gameAudio.playStrike(power);
+
     setGameState((prev) => ({
       ...prev,
       striker: { ...prev.striker, vx, vy },
@@ -309,7 +348,9 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
   }, [aimState, gameState.gamePhase]);
 
   const resetGame = useCallback((mode?: GameMode) => {
+    gameAudio.playClick();
     const newMode = mode || gameState.gameMode;
+    lastCollisionsRef.current.clear();
     setGameState({
       ...createInitialGameState(),
       gameMode: newMode,
@@ -319,6 +360,7 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
   }, [gameState.gameMode]);
 
   const setGameMode = useCallback((mode: GameMode) => {
+    gameAudio.playClick();
     resetGame(mode);
   }, [resetGame]);
 
