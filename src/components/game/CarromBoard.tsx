@@ -122,13 +122,18 @@ export const CarromBoard: React.FC = () => {
             {gameState.gameMode === 'vs-ai' ? 'You' : 'Player 1'}
           </span>
           <span className="text-2xl font-display text-primary">{gameState.player1Score}</span>
-          {gameState.player1Color && (
-            <div
-              className={`w-4 h-4 rounded-full mt-1 ${
-                gameState.player1Color === 'white' ? 'bg-game-coin-white' : 'bg-game-coin-black'
-              }`}
-            />
-          )}
+          <div className="flex items-center gap-1">
+            {gameState.player1Color && (
+              <div
+                className={`w-4 h-4 rounded-full ${
+                  gameState.player1Color === 'white' ? 'bg-game-coin-white border border-border' : 'bg-game-coin-black'
+                }`}
+              />
+            )}
+            {gameState.player1Due > 0 && (
+              <span className="text-[10px] text-destructive font-semibold">Due: {gameState.player1Due}</span>
+            )}
+          </div>
         </div>
         <div className="flex flex-col items-center">
           <span className="text-xs text-muted-foreground">Turn</span>
@@ -144,19 +149,27 @@ export const CarromBoard: React.FC = () => {
               : `P${gameState.currentPlayer}`
             }
           </div>
+          {gameState.pendingQueenCover && (
+            <span className="text-[10px] text-game-coin-queen font-semibold mt-1">Cover Queen!</span>
+          )}
         </div>
         <div className="flex flex-col items-center">
           <span className="text-xs text-muted-foreground uppercase tracking-wider">
             {gameState.gameMode === 'vs-ai' ? 'AI' : 'Player 2'}
           </span>
           <span className="text-2xl font-display text-primary">{gameState.player2Score}</span>
-          {gameState.player2Color && (
-            <div
-              className={`w-4 h-4 rounded-full mt-1 ${
-                gameState.player2Color === 'white' ? 'bg-game-coin-white' : 'bg-game-coin-black'
-              }`}
-            />
-          )}
+          <div className="flex items-center gap-1">
+            {gameState.player2Color && (
+              <div
+                className={`w-4 h-4 rounded-full ${
+                  gameState.player2Color === 'white' ? 'bg-game-coin-white border border-border' : 'bg-game-coin-black'
+                }`}
+              />
+            )}
+            {gameState.player2Due > 0 && (
+              <span className="text-[10px] text-destructive font-semibold">Due: {gameState.player2Due}</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -289,7 +302,7 @@ export const CarromBoard: React.FC = () => {
       </div>
 
       {/* Instructions & Rules */}
-      <div className="text-xs text-muted-foreground text-center max-w-[320px] mt-2 space-y-1">
+      <div className="text-xs text-muted-foreground text-center max-w-[340px] mt-2 space-y-2">
         <p>Drag striker sideways to position, pull back and release to shoot!</p>
         <div className="flex justify-center gap-3 text-[10px] opacity-70">
           <span className="flex items-center gap-1">
@@ -301,6 +314,12 @@ export const CarromBoard: React.FC = () => {
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-game-coin-queen inline-block"></span> 50pts
           </span>
+        </div>
+        <div className="text-[9px] opacity-60 leading-relaxed">
+          <p>• First coin pocketed decides your color</p>
+          <p>• Queen must be covered with your own coin</p>
+          <p>• Pocketing opponent's coin = Foul (points go to them)</p>
+          <p>• Striker foul = -10 pts + 1 Due (return a coin)</p>
         </div>
       </div>
 

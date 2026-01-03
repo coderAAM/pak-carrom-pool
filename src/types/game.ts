@@ -36,6 +36,12 @@ export interface GameState {
   winner: 1 | 2 | null;
   message: string;
   gameMode: GameMode;
+  // Carrom specific rules
+  queenCovered: boolean; // Queen needs to be covered with own coin
+  pendingQueenCover: 1 | 2 | null; // Player who needs to cover queen
+  player1Due: number; // Coins owed due to fouls
+  player2Due: number;
+  lastPocketedBy: 1 | 2 | null; // Track who pocketed last
 }
 
 export interface AimState {

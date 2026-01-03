@@ -95,6 +95,11 @@ export const createInitialGameState = (): GameState => ({
   winner: null,
   message: 'Player 1: Position striker and shoot!',
   gameMode: 'vs-ai',
+  queenCovered: false,
+  pendingQueenCover: null,
+  player1Due: 0,
+  player2Due: 0,
+  lastPocketedBy: null,
 });
 
 export const getStrikerBounds = (currentPlayer: 1 | 2): { minX: number; maxX: number; y: number } => {
