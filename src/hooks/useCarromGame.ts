@@ -146,6 +146,7 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
       // Check pocket collisions - track pocketed coins this turn
       const pocketedThisTurn: Coin[] = [];
       let strikerPocketed = false;
+      let queenPocketedThisTurn = false;
 
       activeCoins.forEach((coin) => {
         pockets.forEach((pocket) => {
@@ -160,6 +161,7 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
             } else {
               pocketedThisTurn.push(coin);
               if (coin.type === 'queen') {
+                queenPocketedThisTurn = true;
                 gameAudio.playQueenPocket();
               } else {
                 gameAudio.playPocket();
@@ -183,6 +185,10 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
         let color1 = prev.player1Color;
         let color2 = prev.player2Color;
         let isFoul = false;
+        let queenCovered = prev.queenCovered;
+        let pendingQueenCover = prev.pendingQueenCover;
+        let due1 = prev.player1Due;
+        let due2 = prev.player2Due;
 
         // Freestyle mode: First coin pocketed determines color
         if (!color1 && pocketedThisTurn.length > 0) {
@@ -193,56 +199,142 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           }
         }
 
-        // Calculate points and check for fouls
-        let validPockets = 0;
+        // Count valid pockets and check for fouls
+        let validOwnPockets = 0;
         let foulPockets = 0;
+        let pointsEarned = 0;
 
         pocketedThisTurn.forEach((coin) => {
           const points = getPointsForCoin(coin.type);
           
           if (coin.type === 'queen') {
-            // Queen can be pocketed by anyone
-            if (prev.currentPlayer === 1) {
-              newScore1 += points;
-            } else {
-              newScore2 += points;
+            // Queen pocketed - needs to be covered
+            if (!queenCovered) {
+              pendingQueenCover = prev.currentPlayer;
+              // Queen points awarded only if covered
             }
-            validPockets++;
+            validOwnPockets++; // Continue turn to cover
           } else {
-            // Check if player pocketed opponent's coin (FOUL in freestyle)
+            // Check if player pocketed opponent's coin (FOUL)
             const isPlayer1 = prev.currentPlayer === 1;
             const playerColor = isPlayer1 ? color1 : color2;
             
             if (playerColor && coin.type !== playerColor) {
-              // Foul! Player pocketed opponent's coin
+              // FOUL! Pocketed opponent's coin
               isFoul = true;
               foulPockets++;
-              // Give points to opponent
+              // Points go to opponent
               if (isPlayer1) {
                 newScore2 += points;
+                pointsEarned -= points;
               } else {
                 newScore1 += points;
+                pointsEarned -= points;
               }
             } else {
               // Valid pocket - own color
               if (isPlayer1) {
                 newScore1 += points;
+                pointsEarned += points;
               } else {
                 newScore2 += points;
+                pointsEarned += points;
               }
-              validPockets++;
+              validOwnPockets++;
+
+              // Check if this covers the queen
+              if (pendingQueenCover === prev.currentPlayer && !queenCovered) {
+                queenCovered = true;
+                pendingQueenCover = null;
+                // Award queen points
+                if (isPlayer1) {
+                  newScore1 += 50;
+                  pointsEarned += 50;
+                } else {
+                  newScore2 += 50;
+                  pointsEarned += 50;
+                }
+                message = prev.gameMode === 'vs-ai'
+                  ? (prev.currentPlayer === 1 ? 'Queen covered! +50 points!' : 'AI covered Queen!')
+                  : `Queen covered! +50 points!`;
+              }
             }
           }
         });
 
+        // Handle queen not covered - return queen to center
+        if (pendingQueenCover && validOwnPockets === 0 && !strikerPocketed && pocketedThisTurn.length > 0) {
+          // Queen was pocketed but not covered - return queen
+          const queenIndex = updatedCoins.findIndex(c => c.type === 'queen');
+          if (queenIndex !== -1) {
+            updatedCoins[queenIndex] = {
+              ...updatedCoins[queenIndex],
+              isPocketed: false,
+              x: BOARD_SIZE / 2,
+              y: BOARD_SIZE / 2,
+              vx: 0,
+              vy: 0,
+            };
+          }
+          pendingQueenCover = null;
+          message = 'Queen must be covered! Queen returned to center.';
+        }
+
         // Handle striker pocketed foul
         if (strikerPocketed) {
           isFoul = true;
-          // Penalty: deduct 10 points
+          // Penalty: Add 1 coin to due (player must return a coin)
           if (prev.currentPlayer === 1) {
+            due1 += 1;
+            // Also deduct 10 points
             newScore1 = Math.max(0, newScore1 - 10);
           } else {
+            due2 += 1;
             newScore2 = Math.max(0, newScore2 - 10);
+          }
+        }
+
+        // Handle due - return pocketed coins
+        if (due1 > 0 && prev.currentPlayer === 1 && validOwnPockets > 0) {
+          // Return a pocketed coin
+          const returnCount = Math.min(due1, validOwnPockets);
+          due1 -= returnCount;
+          // Find pocketed coins of player's color and return them
+          let returned = 0;
+          for (let i = 0; i < updatedCoins.length && returned < returnCount; i++) {
+            if (updatedCoins[i].isPocketed && updatedCoins[i].type === color1) {
+              updatedCoins[i] = {
+                ...updatedCoins[i],
+                isPocketed: false,
+                x: BOARD_SIZE / 2 + (Math.random() - 0.5) * 40,
+                y: BOARD_SIZE / 2 + (Math.random() - 0.5) * 40,
+                vx: 0,
+                vy: 0,
+              };
+              // Deduct points
+              newScore1 -= getPointsForCoin(updatedCoins[i].type);
+              returned++;
+            }
+          }
+        }
+
+        if (due2 > 0 && prev.currentPlayer === 2 && validOwnPockets > 0) {
+          const returnCount = Math.min(due2, validOwnPockets);
+          due2 -= returnCount;
+          let returned = 0;
+          for (let i = 0; i < updatedCoins.length && returned < returnCount; i++) {
+            if (updatedCoins[i].isPocketed && updatedCoins[i].type === color2) {
+              updatedCoins[i] = {
+                ...updatedCoins[i],
+                isPocketed: false,
+                x: BOARD_SIZE / 2 + (Math.random() - 0.5) * 40,
+                y: BOARD_SIZE / 2 + (Math.random() - 0.5) * 40,
+                vx: 0,
+                vy: 0,
+              };
+              newScore2 -= getPointsForCoin(updatedCoins[i].type);
+              returned++;
+            }
           }
         }
 
@@ -253,18 +345,18 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           
           if (strikerPocketed && foulPockets > 0) {
             message = prev.gameMode === 'vs-ai'
-              ? (prev.currentPlayer === 1 ? 'Foul! Striker + opponent coin pocketed!' : 'AI fouled!')
-              : `Foul! Player ${prev.currentPlayer} pocketed striker and opponent's coin!`;
+              ? (prev.currentPlayer === 1 ? 'Foul! Striker + opponent coin! -10 pts, 1 Due' : 'AI fouled!')
+              : `Foul! Player ${prev.currentPlayer}: Striker + opponent coin!`;
           } else if (strikerPocketed) {
             message = prev.gameMode === 'vs-ai'
-              ? (prev.currentPlayer === 1 ? 'Foul! Striker pocketed. -10 points!' : 'AI fouled! -10 points!')
-              : `Foul! Striker pocketed. -10 points!`;
-          } else {
+              ? (prev.currentPlayer === 1 ? 'Striker pocketed! -10 pts, 1 Due' : 'AI striker foul! -10 pts')
+              : `Striker pocketed! -10 points, 1 Due`;
+          } else if (foulPockets > 0) {
             message = prev.gameMode === 'vs-ai'
-              ? (prev.currentPlayer === 1 ? 'Foul! You pocketed opponent\'s coin!' : 'AI pocketed your coin! Points for you!')
+              ? (prev.currentPlayer === 1 ? 'Foul! Opponent\'s coin pocketed!' : 'AI pocketed your coin!')
               : `Foul! Player ${prev.currentPlayer} pocketed opponent's coin!`;
           }
-        } else if (validPockets === 0) {
+        } else if (validOwnPockets === 0 && !queenPocketedThisTurn) {
           nextPlayer = prev.currentPlayer === 1 ? 2 : 1;
           if (prev.gameMode === 'vs-ai') {
             message = nextPlayer === 1 ? 'Your turn!' : 'AI\'s turn...';
@@ -272,35 +364,38 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
             message = `Player ${nextPlayer}'s turn`;
           }
           gameAudio.playTurnChange();
-        } else {
-          // Valid pockets - continue turn
-          if (prev.gameMode === 'vs-ai') {
-            const pointsEarned = pocketedThisTurn.reduce((sum, c) => sum + getPointsForCoin(c.type), 0);
-            message = prev.currentPlayer === 1 
-              ? `Great! +${pointsEarned} points! Your turn again!` 
-              : `AI scored +${pointsEarned} points!`;
-          } else {
-            message = `Great shot! Player ${prev.currentPlayer} continues`;
+        } else if (validOwnPockets > 0 || queenPocketedThisTurn) {
+          // Continue turn
+          if (!message) {
+            if (prev.gameMode === 'vs-ai') {
+              message = prev.currentPlayer === 1 
+                ? (pointsEarned > 0 ? `+${pointsEarned} points! Your turn again!` : 'Nice shot! Continue!')
+                : `AI scored! +${Math.max(0, pointsEarned)} points!`;
+            } else {
+              message = `Great! Player ${prev.currentPlayer} continues`;
+            }
           }
         }
 
-        // Check for winner - all coins of one color pocketed
+        // Check for winner
         const whiteCoins = updatedCoins.filter(c => c.type === 'white' && !c.isPocketed);
         const blackCoins = updatedCoins.filter(c => c.type === 'black' && !c.isPocketed);
-        const queenPocketed = updatedCoins.find(c => c.type === 'queen')?.isPocketed;
+        const queenStillOnBoard = updatedCoins.find(c => c.type === 'queen' && !c.isPocketed);
         let winner: 1 | 2 | null = null;
 
-        // Win condition: pocket all your coins (and queen for bonus)
-        if (whiteCoins.length === 0 || blackCoins.length === 0) {
-          // Determine winner by score
-          if (newScore1 > newScore2) {
+        // Win condition: All own coins pocketed (and queen if applicable)
+        if (color1 && color2) {
+          const player1CoinsLeft = color1 === 'white' ? whiteCoins.length : blackCoins.length;
+          const player2CoinsLeft = color2 === 'white' ? whiteCoins.length : blackCoins.length;
+
+          if (player1CoinsLeft === 0 && (queenCovered || !queenStillOnBoard)) {
             winner = 1;
-          } else if (newScore2 > newScore1) {
+          } else if (player2CoinsLeft === 0 && (queenCovered || !queenStillOnBoard)) {
             winner = 2;
-          } else {
-            // Tie - whoever pocketed last wins
-            winner = prev.currentPlayer;
           }
+        } else if (whiteCoins.length === 0 || blackCoins.length === 0) {
+          // Fallback: determine by score
+          winner = newScore1 > newScore2 ? 1 : (newScore2 > newScore1 ? 2 : prev.currentPlayer);
         }
 
         if (winner) {
@@ -326,6 +421,11 @@ export const useCarromGame = (initialMode: GameMode = 'vs-ai') => {
           currentPlayer: nextPlayer,
           gamePhase: winner ? 'ended' : 'placing',
           winner,
+          queenCovered,
+          pendingQueenCover,
+          player1Due: due1,
+          player2Due: due2,
+          lastPocketedBy: validOwnPockets > 0 ? prev.currentPlayer : prev.lastPocketedBy,
           message: winner 
             ? (prev.gameMode === 'vs-ai' 
               ? (winner === 1 ? '🎉 You Win!' : '🤖 AI Wins!') 
