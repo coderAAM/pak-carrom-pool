@@ -288,29 +288,77 @@ export const CarromBoard: React.FC = () => {
         </button>
       </div>
 
-      {/* Instructions */}
-      <div className="text-xs text-muted-foreground text-center max-w-[300px] mt-2">
-        <p>Drag the striker sideways to position, then pull back and release to shoot!</p>
+      {/* Instructions & Rules */}
+      <div className="text-xs text-muted-foreground text-center max-w-[320px] mt-2 space-y-1">
+        <p>Drag striker sideways to position, pull back and release to shoot!</p>
+        <div className="flex justify-center gap-3 text-[10px] opacity-70">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-game-coin-black inline-block"></span> 10pts
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-game-coin-white border border-border inline-block"></span> 20pts
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-game-coin-queen inline-block"></span> 50pts
+          </span>
+        </div>
       </div>
 
       {/* Winner overlay */}
       {gameState.winner && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-card rounded-2xl p-8 text-center animate-scale-in border border-border">
-            <h2 className="text-3xl font-display game-title mb-4">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-gradient-to-br from-card to-muted rounded-3xl p-10 text-center animate-scale-in border-2 border-primary/50 shadow-2xl max-w-sm mx-4">
+            {/* Trophy/celebration icon */}
+            <div className="text-6xl mb-4">
               {gameState.gameMode === 'vs-ai'
-                ? (gameState.winner === 1 ? 'You Win! 🎉' : 'AI Wins!')
-                : `Player ${gameState.winner} Wins!`
+                ? (gameState.winner === 1 ? '🏆' : '🤖')
+                : '🏆'
+              }
+            </div>
+            
+            {/* Winner text */}
+            <h2 className="text-4xl font-display font-bold mb-2 bg-gradient-to-r from-yellow-400 via-orange-500 to-yellow-400 bg-clip-text text-transparent">
+              {gameState.gameMode === 'vs-ai'
+                ? (gameState.winner === 1 ? 'YOU WIN!' : 'AI WINS!')
+                : `PLAYER ${gameState.winner} WINS!`
               }
             </h2>
-            <p className="text-muted-foreground mb-6">
-              Final Score: {gameState.player1Score} - {gameState.player2Score}
+            
+            {/* Winner label */}
+            <p className="text-xl text-primary font-semibold mb-4">
+              {gameState.gameMode === 'vs-ai'
+                ? (gameState.winner === 1 ? '👤 Player 1 is the Champion!' : '🤖 Computer Victory!')
+                : `🎯 Player ${gameState.winner} is the Champion!`
+              }
             </p>
+            
+            {/* Score display */}
+            <div className="flex justify-center gap-8 mb-6">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground uppercase">
+                  {gameState.gameMode === 'vs-ai' ? 'You' : 'P1'}
+                </p>
+                <p className={`text-3xl font-bold ${gameState.winner === 1 ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {gameState.player1Score}
+                </p>
+              </div>
+              <div className="text-2xl text-muted-foreground self-center">vs</div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground uppercase">
+                  {gameState.gameMode === 'vs-ai' ? 'AI' : 'P2'}
+                </p>
+                <p className={`text-3xl font-bold ${gameState.winner === 2 ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {gameState.player2Score}
+                </p>
+              </div>
+            </div>
+            
+            {/* Play again button */}
             <button
               onClick={() => resetGame()}
-              className="px-8 py-3 bg-primary text-primary-foreground rounded-lg font-bold hover:opacity-90 transition-opacity"
+              className="w-full px-8 py-4 bg-gradient-to-r from-primary to-primary/80 text-primary-foreground rounded-xl font-bold text-lg hover:opacity-90 transition-all hover:scale-105 shadow-lg"
             >
-              Play Again
+              🎮 Play Again
             </button>
           </div>
         </div>
